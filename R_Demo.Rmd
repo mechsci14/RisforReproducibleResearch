@@ -1,0 +1,339 @@
+---
+title: "Intro to Clinical Research"
+author: "Madelyn Houser"
+date: "2/18/2021"
+output: 
+  word_document:
+    toc: yes
+  html_document:
+    toc: yes
+always_allow_html: true
+---
+
+```{r session}
+# This will document the version of R and the operating system that I am using for this analysis.
+sessionInfo()
+```
+
+```{r packages}
+# This will load the packages needed for this analysis and document the version of each that I'm using
+
+# If you have not previously installed any of these packages, install them using the function
+## install.packages("PACKAGENAME")
+
+# Because a line of code in this Markdown produces HTML content and we want to be able to knit to Word still,
+## make sure the following packages are installed on your machine. They do not have to be loaded each time.
+# install.packages("webshot")
+# webshot::install_phantomjs()
+
+library("Hmisc")
+packageVersion("Hmisc")
+library("tidyverse")
+packageVersion("tidyverse")
+library("desctable")
+packageVersion("desctable")
+library("ggpubr")
+packageVersion("ggpubr")
+```
+  
+# Import and merge data
+  
+```{r import}
+# Import the data sets of your choice into R from files saved locally on your computer
+# Replace the path here with the path to your local file
+demo <- sasxport.get("C:/Users/mecho/Documents/Emory/Post-doc/Presentations/IntroToClinicalResearch_GuestLecture/NHANES/DEMO_J.XPT")
+cbc <- sasxport.get("C:/Users/mecho/Documents/Emory/Post-doc/Presentations/IntroToClinicalResearch_GuestLecture/NHANES/CBC_J.XPT")
+hepc <- sasxport.get("C:/Users/mecho/Documents/Emory/Post-doc/Presentations/IntroToClinicalResearch_GuestLecture/NHANES/HEPC_J.XPT")
+```
+  
+```{r altimport}
+# Alternatively, you can download the files from NHANES directly into R
+# Replace the URLs with the URLs of the data sets of your choice
+download.file("https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/DEMO_J.XPT", tf <- tempfile(), mode="wb")
+demo2 <- foreign::read.xport(tf)
+
+download.file("https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/CBC_J.XPT", tf <- tempfile(), mode="wb")
+cbc2 <- foreign::read.xport(tf)
+
+download.file("https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/HEPC_J.XPT", tf <- tempfile(), mode="wb")
+hepc2 <- foreign::read.xport(tf)
+```
+```{r rm1}
+# You can remove variables that you don't want to keep in your environment
+rm(tf, cbc2, demo2, hepc2)
+```
+  
+```{r select}
+# Select only the variables of interest from the data sets
+demo <- demo %>% select(seqn, riagendr, ridageyr, ridagemn)
+```
+  
+```{r merge}
+# Merge into one data set, keeping only rows with matching identifiers in demographic data set
+df <- merge(x=demo, y=cbc, by="seqn", all.x=TRUE)
+df <- merge(x=df, y=hepc, by="seqn", all.x=TRUE)
+```
+
+  
+  
+# Explore and Summarize data
+  
+```{r explore}
+# Report class of the data set
+class(df)
+
+# This will provide some basic information on each variable in the data set
+describe(df)
+```
+  
+# Data cleanup and wrangling
+  
+Let's check the format of our variables and label the levels of categorical variables and make sure they're classified as factors.
+  
+```{r label}
+# Check class of variable
+class(df$riagendr)
+# Make variable a factor and define levels and labels of levels
+df$riagendr <- factor(df$riagendr, levels=c("1", "2"), labels=c("Male", "Female"))
+# Change the name of the variable
+df <- rename(df, "Sex" = "riagendr")
+# Check the class of the variable again to be sure that the changes were made correctly
+class(df$Sex)
+
+# Check class and change label of another variable
+class(df$ridageyr)
+label(df$ridageyr) <- "Age (years)"
+df <- rename(df, "Age" = "ridageyr")
+
+# Spot check class of lab test variables
+class(df$lbxwbcsi)
+class(df$lbxlypct)
+class(df$lbxnrbc)
+
+# Fix formatting of Hep C RNA variable
+class(df$lbxhcr)
+df$lbxhcr <- factor(df$lbxhcr, levels=(c("1", "2", "3")), labels=c("Positive", "Negative", "Negative Ab Screening"))
+df <- rename(df, "HepC_RNA" = "lbxhcr")
+class(df$HepC_RNA)
+# Check factor levels of the variable
+levels(df$HepC_RNA)
+
+# Rename some other variables
+df <- rename(df, "RBCs" = "lbxrbcsi")
+df <- rename(df, "Leukocytes" = "lbxwbcsi")
+df <- rename(df, "Lymphocytes" = "lbxlypct")
+```
+  
+Let's filter the data so that we're only analyzing data for adults
+  
+```{r filter}
+dfad <- df %>% filter(Age >= 18)
+
+summary(dfad$Age)
+```
+  
+# Visualize data for variables of interest
+  
+## Table - Categorical Variables by Sex
+  
+```{r tab1}
+# Create a table summarizing some variables of interest by sex
+Tab1 <- dfad %>% group_by(Sex) %>% select(Age, HepC_RNA) %>% desctable() %>% datatable()
+
+Tab1
+```
+  
+## Variable graphs
+  
+```{r plotcatvar}
+# Plot counts of each level of a categorical variable
+ggplot(data = dfad) + 
+  geom_bar(mapping = (aes(x = Sex, fill=Sex)))
+
+ggplot(data = dfad) + 
+  geom_bar(mapping = (aes(x = HepC_RNA, fill=HepC_RNA)))
+
+# Plot Age split by Sex
+ggplot(data = dfad) +
+  geom_boxplot(mapping=aes(x=Sex, y=Age, fill=Sex))
+```
+  
+```{r plotconvar}
+# Create a boxplot of RBCs data split by Sex
+ggplot(data=dfad, mapping=aes(x=Sex, y=RBCs, fill=Sex)) +
+  geom_boxplot()
+
+# Create a boxplot of RBCs data split by HepC_RNA
+ggplot(data=dfad, mapping=aes(x=HepC_RNA, y=RBCs, color=HepC_RNA)) +
+  geom_boxplot()
+
+# Repeat with other continuous variables
+ggplot(data=dfad, mapping=aes(x=Sex, y=Leukocytes, fill=Sex)) +
+  geom_boxplot()
+
+ggplot(data=dfad, mapping=aes(x=HepC_RNA, y=Leukocytes, color=HepC_RNA)) +
+  geom_boxplot()
+
+ggplot(data=dfad, mapping=aes(x=Sex, y=Lymphocytes, fill=Sex)) +
+  geom_boxplot()
+
+ggplot(data=dfad, mapping=aes(x=HepC_RNA, y=Lymphocytes, color=HepC_RNA)) +
+  geom_boxplot()
+
+# Let's make sure we have enough data to work with within our HepC positive group if we split it by sex
+
+# Create a data set with only subjects positive for HepC RNA
+dfadpos <- dfad %>% filter(HepC_RNA == "Positive")
+
+ggplot(data=dfadpos, mapping=aes(x=Sex, y=RBCs, color=Sex)) +
+  geom_jitter(width=.2)
+```
+  
+#### We observe that there is an extremely high value in the Leukocytes variable data.
+  
+  
+## Check distribution of continuous variables
+  
+### Density and Q-Q plots
+  
+Let's plot the distribution of some continuous variables.
+  
+```{r distrib, fig.height=2, fig.width=4}
+# Create an object consisting of a plot of the distribution of the RBCs variable
+denplot <- ggdensity(df$RBCs, xlab = "Red Blood Cells (million cells/uL)")
+# Create an object consisting of a Q-Q plot of the RBCs variable
+qqplot <- ggqqplot(df$RBCs, xlab = "Red Blood Cells (million cells/uL)")
+# Show the plots side by side
+ggarrange(denplot, qqplot, ncol=2, nrow=1)
+
+
+# Repeat for the next variable of interest
+denplot <- ggdensity(df$Leukocytes, xlab = "Leukocytes (1000 cells/uL)")
+qqplot <- ggqqplot(df$Leukocytes, xlab = "Leukocytes (1000 cells/uL)")
+
+ggarrange(denplot, qqplot, ncol=2, nrow=1)
+
+# Repeat for the next variable of interest
+denplot <- ggdensity(df$Lymphocytes, xlab = "Lymphocytes (%)")
+qqplot <- ggqqplot(df$Lymphocytes, xlab = "Lymphocytes (%)")
+
+ggarrange(denplot, qqplot, ncol=2, nrow=1)
+```
+  
+#### Results: The distributions of the RBCs, Leukocytes, and Lymphocytes variables appear roughly normal with a few unusually high values.
+  
+# Remove outlier
+  
+There is one extremely high value in the Leukocytes variable data that is not at all comparable to the other values. Let's exclude that subject from our analysis.
+  
+```{r rmoutlier}
+# Return the value in column 1 that has the maximum value in the Leukocytes column in the dfad data set
+# This relies on indexing, which means referring to a specific position in the dataset
+# In R, indexing takes the format: data[row#, column#]
+print(dfad[which.max(dfad$Leukocytes),1])
+
+# Remove the row with the outlier (keep all data that do not match the selected ID number in the seqn column)
+dfad <- dfad %>% filter(seqn != "102389")
+```
+
+  
+# Is there a sex difference in Hepatitis C RNA positivity?
+  
+Let's run a chi-square test to address this question.
+  
+```{r HepCSex}
+# Chi-square test
+stats::chisq.test(x=dfad$Sex, y=dfad$HepC_RNA)
+
+# Let's focus on just the positives and negatives in people who got an RNA test
+# Let's also just drop the NAs in the HepC_RNA column to simplify graphing
+dfadHepC <- dfad %>% drop_na(HepC_RNA) %>% filter(HepC_RNA != "Negative Ab Screening")
+
+# Run the Chi-square test on just the RNA test subjects
+stats::chisq.test(x=dfadHepC$Sex, y=dfadHepC$HepC_RNA)
+```
+  
+Let's make a graph to visualize this comparison.
+  
+```{r HepCSexGraph, fig.height=3, fig.width=3}
+ggplot(data=dfadHepC, mapping=aes(x=HepC_RNA, fill=Sex)) +
+  geom_bar() +
+  xlab("Hepatitis C RNA") +
+  ylab("Count")
+
+# Save this plot
+ggsave("C:/Users/mecho/Documents/Emory/Post-doc/Presentations/IntroToClinicalResearch_GuestLecture/HepCRNA_by_Sex.pdf")
+```
+  
+### Results: HepC RNA positivity by sex
+  
+#### Positivity in an RNA test for hepatitis C does differ significantly by sex. Males are more likely than females to test positive for hepatitis C RNA.
+  
+  
+  
+# Do leukocyte counts differ in subjects who test positive for hepatitis C from those that test negative?
+  
+Let's run a one-way ANOVA to address this question.
+  
+```{r leukHepC}
+# One-way ANOVA 
+res <- aov(Leukocytes ~ HepC_RNA, dfad)
+summary(res)
+```
+  
+Let's make a graph to visualize this comparison.
+  
+```{r leukHepCgraph}
+# Remove NAs in HepC_RNA variable for graphing purposes
+dfadHepC2 <- dfad %>% drop_na(HepC_RNA)
+
+ggplot(data=dfadHepC2, mapping=aes(x=HepC_RNA, y=Leukocytes, color=HepC_RNA)) +
+  geom_boxplot() +
+  xlab("Hepatitis C RNA") +
+  ylab("Leukocytes (1000 cells/uL)") +
+  stat_compare_means(method="aov")
+
+ggsave("C:/Users/mecho/Documents/Emory/Post-doc/Presentations/IntroToClinicalResearch_GuestLecture/Leukocytes_by_HepCRNA.pdf")
+```
+  
+### Results: Leukocyte concentrations by HepC RNA result
+  
+#### Leukocyte concentrations do not differ significantly based on hepatitis C RNA positivity status.
+  
+  
+  
+# Do lymphocyte and RBC levels correlate with one another?
+  
+Let's do a Pearson correlation to address this question.
+  
+```{r LymphRBC}
+# Pearson correlation 
+cor.test(x=dfad$Lymphocytes, y=dfad$RBCs, method="pearson")
+```
+  
+Let's make a graph to visualize this comparison.
+  
+```{r LymphRBCgraph}
+
+ggplot(data=dfad, mapping=aes(x=Lymphocytes, y=RBCs)) +
+  geom_point() +
+  xlab("Lymphocytes (%)") +
+  ylab("Red Blood Cells (million cells/uL)") +
+  geom_smooth(method="lm")
+  stat_cor(method="pearson")
+
+ggsave("C:/Users/mecho/Documents/Emory/Post-doc/Presentations/IntroToClinicalResearch_GuestLecture/Lymphocytes_by_RBCs.pdf")
+```
+  
+### Results: Lymphocyte and RBC concentrations
+  
+#### Lymphocyte and RBC concentrations are not correlated with one another.
+  
+  
+  
+  
+
+
+
+
+
